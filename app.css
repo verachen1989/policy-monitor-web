@@ -216,3 +216,57 @@ html{color-scheme:light}body{margin:0;padding:22px;background:#f5f7fa}button{cur
 #pm-business .pm-implementation-baseline .pm-cell-count{color:var(--pm-primary)}
 #pm-business .pm-overview .pm-cell-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;color:var(--pm-sub);font-size:11px}
 #pm-business .pm-overview .pm-cell-count{color:var(--pm-primary)}
+
+/* Business reading sizes, with the same Chinese font stack as the land list. */
+#pm-business.pm-business-page{--pm-text-size:14px;--pm-meta-size:12px;font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif;font-size:var(--pm-text-size)}
+#pm-business.pm-business-page .pm-section,
+#pm-business.pm-business-page .pm-view-tabs button,
+#pm-business.pm-business-page table,
+#pm-business.pm-business-page thead th,
+#pm-business.pm-business-page .pm-matrix .pm-topic-label,
+#pm-business.pm-business-page .pm-matrix .pm-group-button,
+#pm-business.pm-business-page .pm-matrix .pm-cell-count,
+#pm-business.pm-business-page .pm-library-table td,
+#pm-business.pm-business-page .pm-library-open strong,
+#pm-business.pm-business-page .pm-policy-option-title,
+#pm-business.pm-business-page .pm-policy-group>summary,
+#pm-business.pm-business-page .pm-selected-policy .pm-policy-title,
+#pm-business.pm-business-page .pm-selected-policy h3,
+#pm-business.pm-business-page .pm-detail-tab,
+#pm-business.pm-business-page .pm-detail-content h3,
+#pm-business.pm-business-page .pm-detail-content p,
+#pm-business.pm-business-page .pm-detail-content ul,
+#pm-business.pm-business-page .pm-topic-link,
+#pm-business.pm-business-page .pm-original{font-size:var(--pm-text-size)}
+#pm-business.pm-business-page thead th,
+#pm-business.pm-business-page .pm-matrix .pm-topic-label{font-weight:500}
+#pm-business.pm-business-page .pm-library-open strong,
+#pm-business.pm-business-page .pm-policy-option-title,
+#pm-business.pm-business-page .pm-selected-policy .pm-policy-title,
+#pm-business.pm-business-page .pm-matrix .pm-group-button{font-weight:600}
+#pm-business.pm-business-page .pm-matrix .pm-cell-count{line-height:22px}
+#pm-business.pm-business-page .pm-policy-option-title,
+#pm-business.pm-business-page .pm-detail-content p,
+#pm-business.pm-business-page .pm-detail-content ul{line-height:1.75}
+#pm-business.pm-business-page .pm-caption,
+#pm-business.pm-business-page .pm-tablefoot,
+#pm-business.pm-business-page thead th span,
+#pm-business.pm-business-page .pm-group-button span:last-child,
+#pm-business.pm-business-page .pm-matrix tbody .pm-num,
+#pm-business.pm-business-page .pm-matrix .pm-reference-count,
+#pm-business.pm-business-page .pm-topic-help-popover,
+#pm-business.pm-business-page .pm-library-excerpt,
+#pm-business.pm-business-page .pm-library-mobile-meta,
+#pm-business.pm-business-page .pm-library-table td:nth-child(4),
+#pm-business.pm-business-page .pm-policy-list-head,
+#pm-business.pm-business-page .pm-policy-option-date,
+#pm-business.pm-business-page .pm-selected-policy .pm-caption,
+#pm-business.pm-business-page .pm-selected-policy a,
+#pm-business.pm-business-page .pm-detail-header p,
+#pm-business.pm-business-page .pm-detail .pm-source-disclosure .pm-policy-meta,
+#pm-business.pm-business-page .pm-topic-expand,
+#pm-business.pm-business-page .pm-topic-collapse{font-size:var(--pm-meta-size)}
+#pm-business.pm-business-page .pm-policy-option-date{line-height:24.5px}
+#pm-business.pm-business-page .pm-tablebar h2,
+#pm-business.pm-business-page .pm-policy-list h3{font-size:16px;font-weight:600}
+#pm-business.pm-business-page .pm-tablebar h2 span{font-size:var(--pm-meta-size)}
