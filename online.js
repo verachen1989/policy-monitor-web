@@ -18,6 +18,7 @@ function createOnline(options) {
   const gzipTimeoutMs=Number.isFinite(options.gzipTimeoutMs)?Math.max(0,options.gzipTimeoutMs):8000;
   const storageKey='policy-monitor:personal:v1:'+baseURL.pathname;
   let snapshot=null,loading=null;
+  const detailCache=new Map();
   function withTimeout(promise,ms){
     if(!ms)return promise;
     let timer;
@@ -58,12 +59,30 @@ function createOnline(options) {
     return value;
   }
   function personalKey(policy){
-    const identity=policy.personal_key||snapshot?.library_details[policy.policy_id]?.personal_key;
+    const identity=policy.personal_key||snapshot?.library_details?.[policy.policy_id]?.personal_key;
     return validPersonalKey(identity)?identity:policy.policy_id;
   }
+  function validDetailPath(value){
+    return typeof value==='string'&&/^details\/(?:library|topic)\/[a-f0-9]{16,64}\.json$/.test(value);
+  }
   function validate(value){
-    if(!record(value)||value.schema_version!==1||typeof value.generated_at!=='string'||!record(value.business)||!['items','groups','implementation'].every(key=>Array.isArray(value.business[key]))||!record(value.status)||!record(value.tracks)||!record(value.library_details)||!record(value.topic_details)||!record(value.exports)||!TRACKS.every(track=>record(value.tracks[track])&&Array.isArray(value.tracks[track].policies)&&record(value.tracks[track].library)&&Array.isArray(value.tracks[track].library.items)&&Array.isArray(value.tracks[track].library.references)))throw new Error('已发布政策数据格式不完整，请稍后刷新。');
+    const fullDetails=record(value.library_details)&&record(value.topic_details);
+    const splitDetails=record(value.detail_paths)&&record(value.detail_paths.library)&&record(value.detail_paths.topic)
+      &&Object.values(value.detail_paths.library).every(validDetailPath)&&Object.values(value.detail_paths.topic).every(validDetailPath);
+    if(!record(value)||value.schema_version!==1||typeof value.generated_at!=='string'||!record(value.business)||!['items','groups','implementation'].every(key=>Array.isArray(value.business[key]))||!record(value.status)||!record(value.tracks)||(!fullDetails&&!splitDetails)||!record(value.exports)||!TRACKS.every(track=>record(value.tracks[track])&&Array.isArray(value.tracks[track].policies)&&record(value.tracks[track].library)&&Array.isArray(value.tracks[track].library.items)&&Array.isArray(value.tracks[track].library.references)))throw new Error('已发布政策数据格式不完整，请稍后刷新。');
     return value;
+  }
+  async function readDetail(kind,key){
+    const cacheKey=`${kind}:${key}`;
+    if(detailCache.has(cacheKey))return detailCache.get(cacheKey);
+    const legacy=snapshot?.[kind==='library'?'library_details':'topic_details']?.[key];
+    if(legacy){detailCache.set(cacheKey,legacy);return legacy;}
+    const path=snapshot?.detail_paths?.[kind]?.[key];
+    if(!validDetailPath(path))throw new Error('当前快照缺少这份政策的详情，请刷新数据后重试。');
+    const response=await fetcher(new URL(path,baseURL).href,{cache:'no-store',credentials:'omit',headers:{Accept:'application/json'}});
+    if(!response.ok)throw new Error(`政策详情读取失败（${response.status}），请稍后刷新。`);
+    let detail;try{detail=await response.json();}catch(error){throw new Error('政策详情不是有效 JSON，请稍后刷新。');}
+    detailCache.set(cacheKey,detail);return detail;
   }
   async function readSnapshot(){
     if(typeof decodeGzip==='function'){
@@ -83,7 +102,7 @@ function createOnline(options) {
   async function refresh(){
     if(loading)return loading;
     loading=(async()=>{
-      const next=validate(await readSnapshot());readPersonal(next);snapshot=next;return {generated_at:snapshot.generated_at};
+      const next=validate(await readSnapshot());readPersonal(next);snapshot=next;detailCache.clear();return {generated_at:snapshot.generated_at};
     })();
     try{return await loading;}finally{loading=null;}
   }
@@ -122,7 +141,7 @@ function createOnline(options) {
     return {items,references,stats:{total:items.length,reference_total:references.length,linked_reference_total:references.filter(value=>value.parent_policy_id).length,unmatched_reference_total:references.filter(value=>!value.parent_policy_id).length,...Object.fromEntries(['mapped','unmapped','pending_content','pending_date','conflict'].map(status=>[status,items.filter(value=>value.library_status===status).length]))}};
   }
   function status(){return {...clone(snapshot.status),running:false,snapshot_generated_at:snapshot.generated_at};}
-  function knownPolicy(id){return typeof id==='string'&&own(snapshot.library_details,id);}
+  function knownPolicy(id){return typeof id==='string'&&(own(snapshot.library_details,id)||own(snapshot.detail_paths?.library,id));}
   function noteValues(body){
     if(typeof body.topic_id!=='string'||!snapshot.business.items.some(item=>item.id===body.topic_id)&&body.topic_id!=='implementation_rules')throw new Error('请选择有效的事项。');
     if(!['北京','天津','石家庄','三亚','陵水'].includes(body.city))throw new Error('请选择有效的城市。');
@@ -158,13 +177,13 @@ function createOnline(options) {
     if(route.startsWith('/api/policy-library/')){
       const id=decodeURIComponent(route.slice('/api/policy-library/'.length));
       if(!knownPolicy(id))throw new Error('当前快照缺少这份政策的详情，请刷新数据后重试。');
-      return applyPersonal(snapshot.library_details[id],personal);
+      return applyPersonal(await readDetail('library',id),personal);
     }
     if(route.startsWith('/api/policies/')){
       const version=decodeURIComponent(route.slice('/api/policies/'.length)),topic=params.get('topic')||'',city=params.get('city')||'';
       const key=[version,topic,city].join('|');
-      if(!own(snapshot.topic_details,key))throw new Error('当前快照缺少该城市事项的政策详情，请刷新数据后重试。');
-      return applyPersonal(snapshot.topic_details[key],personal,personalKey(snapshot.topic_details[key]),topic);
+      const detail=await readDetail('topic',key);
+      return applyPersonal(detail,personal,personalKey(detail),topic);
     }
     if(route==='/api/notes'){const key=noteValues({topic_id:params.get('topic_id'),city:params.get('city')});return {note:personal.notes[key]||'',storage_scope:'browser'};}
     throw new Error('线上展示页不支持此查询。');
