@@ -7,23 +7,47 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const record=value=>value&&typeof value==='object'&&!Array.isArray(value);
 const strings=value=>Array.isArray(value)?value.filter(item=>typeof item==='string'):[];
 const emptyPersonal=()=>({schema_version:1,exclusions:{},notes:{}});
+const validPersonalKey=value=>typeof value==='string'&&/^family:[a-f0-9]{64}$/.test(value);
 function createOnline(options) {
   const baseURL=new URL('./',options.baseURL),fetcher=options.fetch;
   const storageKey='policy-monitor:personal:v1:'+baseURL.pathname;
   let snapshot=null,loading=null;
   function storage(){try{return typeof options.storage==='function'?options.storage():options.storage;}catch(error){throw new Error('无法读取浏览器个人存储；请允许本站使用本地存储后重试。');}}
-  function readPersonal(){
+  function readPersonal(source=snapshot){
     let raw;
     try{raw=storage().getItem(storageKey);}catch(error){throw new Error('无法读取浏览器个人存储；原有排除和备注未能加载。');}
     if(raw===null)return emptyPersonal();
     let value;try{value=JSON.parse(raw);}catch(error){throw new Error('浏览器个人设置已损坏，未覆盖原有记录。');}
     if(!record(value)||value.schema_version!==1||!record(value.exclusions)||!record(value.notes)||Object.values(value.notes).some(note=>typeof note!=='string')||Object.values(value.exclusions).some(entry=>!record(entry)||typeof entry.excluded!=='boolean'||typeof entry.note!=='string'))throw new Error('浏览器个人设置已损坏，未覆盖原有记录。');
-    return value;
+    return migratePersonal(value,source);
   }
   function savePersonal(value){
     const json=JSON.stringify(value);
     try{const target=storage();target.setItem(storageKey,json);if(target.getItem(storageKey)!==json)throw new Error('write not retained');}
     catch(error){throw new Error('保存到当前浏览器失败，请检查浏览器存储权限和可用空间后重试。');}
+  }
+  function migratePersonal(value,source){
+    // Version IDs locate a snapshot; only the opaque family hash owns a
+    // personal exclusion. Migrate exact known identities, never title guesses.
+    const identities=new Map();
+    for(const current of [snapshot,source])for(const [id,policy] of Object.entries(current?.library_details||{}))if(validPersonalKey(policy.personal_key))identities.set(id,policy.personal_key);
+    let changed=false;
+    for(const [oldKey,entry] of Object.entries(value.exclusions)){
+      let pair;try{pair=JSON.parse(oldKey);}catch(error){continue;}
+      if(!Array.isArray(pair)||pair.length!==2||typeof pair[1]!=='string')continue;
+      const identity=identities.get(pair[0]);
+      if(!identity||identity===pair[0])continue;
+      const nextKey=JSON.stringify([identity,pair[1]]);
+      // An explicit newer restoration takes precedence over an old ID.
+      if(!own(value.exclusions,nextKey))value.exclusions[nextKey]=entry;
+      delete value.exclusions[oldKey];changed=true;
+    }
+    if(changed)savePersonal(value);
+    return value;
+  }
+  function personalKey(policy){
+    const identity=policy.personal_key||snapshot?.library_details[policy.policy_id]?.personal_key;
+    return validPersonalKey(identity)?identity:policy.policy_id;
   }
   function validate(value){
     if(!record(value)||value.schema_version!==1||typeof value.generated_at!=='string'||!record(value.business)||!['items','groups','implementation'].every(key=>Array.isArray(value.business[key]))||!record(value.status)||!record(value.tracks)||!record(value.library_details)||!record(value.topic_details)||!record(value.exports)||!TRACKS.every(track=>record(value.tracks[track])&&Array.isArray(value.tracks[track].policies)&&record(value.tracks[track].library)&&Array.isArray(value.tracks[track].library.items)&&Array.isArray(value.tracks[track].library.references)))throw new Error('已发布政策数据格式不完整，请稍后刷新。');
@@ -35,7 +59,7 @@ function createOnline(options) {
       const response=await fetcher(new URL('policy-data.json',baseURL).href,{cache:'no-store',credentials:'omit',headers:{Accept:'application/json'}});
       if(!response.ok)throw new Error(`政策数据读取失败（${response.status}），请稍后刷新。`);
       let result;try{result=await response.json();}catch(error){throw new Error('政策数据不是有效 JSON，请稍后刷新。');}
-      const next=validate(result);readPersonal();snapshot=next;return {generated_at:snapshot.generated_at};
+      const next=validate(result);readPersonal(next);snapshot=next;return {generated_at:snapshot.generated_at};
     })();
     try{return await loading;}finally{loading=null;}
   }
@@ -47,7 +71,7 @@ function createOnline(options) {
     const chosen=whole?.excluded?whole:single?.excluded?single:null;
     return {excluded:Boolean(chosen),exclusion_scope:chosen?(whole?.excluded?'policy':'topic'):null,exclusion_note:chosen?.note||'',excluded_at:null};
   }
-  function applyPersonal(original,personal,id=original.policy_id,topic=''){
+  function applyPersonal(original,personal,id=personalKey(original),topic=''){
     const value=clone(original),ids=[];
     for(const [key,entry] of Object.entries(personal.exclusions)){
       let pair;try{pair=JSON.parse(key);}catch(error){continue;}
@@ -93,7 +117,9 @@ function createOnline(options) {
       if(route==='/api/exclusion'){
         if(!knownPolicy(body.policy_id))throw new Error('该政策不在当前快照中，请刷新后重试。');
         const topic=body.topic_id||'',policy=snapshot.library_details[body.policy_id];
-        const key=JSON.stringify([body.policy_id,topic]);
+        const identity=personalKey(policy);
+        if(!validPersonalKey(identity))throw new Error('当前发布数据缺少稳定政策标识，请刷新数据后重试。');
+        const key=JSON.stringify([identity,topic]);
         if(typeof topic!=='string'||topic&&!strings(policy.all_topic_ids).includes(topic)&&!strings(policy.topic_ids).includes(topic)&&!own(personal.exclusions,key))throw new Error('该事项未关联此政策。');
         if(typeof body.excluded!=='boolean'||body.note!==undefined&&typeof body.note!=='string'||(body.note||'').length>2000)throw new Error('排除说明不能超过 2000 字。');
         personal.exclusions[key]={excluded:body.excluded,note:body.note||''};savePersonal(personal);return {ok:true,storage_scope:'browser'};
@@ -114,7 +140,7 @@ function createOnline(options) {
       const version=decodeURIComponent(route.slice('/api/policies/'.length)),topic=params.get('topic')||'',city=params.get('city')||'';
       const key=[version,topic,city].join('|');
       if(!own(snapshot.topic_details,key))throw new Error('当前快照缺少该城市事项的政策详情，请刷新数据后重试。');
-      return applyPersonal(snapshot.topic_details[key],personal,snapshot.topic_details[key].policy_id,topic);
+      return applyPersonal(snapshot.topic_details[key],personal,personalKey(snapshot.topic_details[key]),topic);
     }
     if(route==='/api/notes'){const key=noteValues({topic_id:params.get('topic_id'),city:params.get('city')});return {note:personal.notes[key]||'',storage_scope:'browser'};}
     throw new Error('线上展示页不支持此查询。');
