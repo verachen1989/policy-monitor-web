@@ -8,8 +8,13 @@ const record=value=>value&&typeof value==='object'&&!Array.isArray(value);
 const strings=value=>Array.isArray(value)?value.filter(item=>typeof item==='string'):[];
 const emptyPersonal=()=>({schema_version:1,exclusions:{},notes:{}});
 const validPersonalKey=value=>typeof value==='string'&&/^family:[a-f0-9]{64}$/.test(value);
+function gzipDecoder(environment){
+  if(typeof environment?.DecompressionStream!=='function'||typeof environment?.Response!=='function')return null;
+  return response=>new environment.Response(response.body.pipeThrough(new environment.DecompressionStream('gzip'))).json();
+}
 function createOnline(options) {
   const baseURL=new URL('./',options.baseURL),fetcher=options.fetch;
+  const decodeGzip=options.decodeGzip===undefined?gzipDecoder(global):options.decodeGzip;
   const storageKey='policy-monitor:personal:v1:'+baseURL.pathname;
   let snapshot=null,loading=null;
   function storage(){try{return typeof options.storage==='function'?options.storage():options.storage;}catch(error){throw new Error('无法读取浏览器个人存储；请允许本站使用本地存储后重试。');}}
@@ -53,13 +58,25 @@ function createOnline(options) {
     if(!record(value)||value.schema_version!==1||typeof value.generated_at!=='string'||!record(value.business)||!['items','groups','implementation'].every(key=>Array.isArray(value.business[key]))||!record(value.status)||!record(value.tracks)||!record(value.library_details)||!record(value.topic_details)||!record(value.exports)||!TRACKS.every(track=>record(value.tracks[track])&&Array.isArray(value.tracks[track].policies)&&record(value.tracks[track].library)&&Array.isArray(value.tracks[track].library.items)&&Array.isArray(value.tracks[track].library.references)))throw new Error('已发布政策数据格式不完整，请稍后刷新。');
     return value;
   }
+  async function readSnapshot(){
+    if(typeof decodeGzip==='function'){
+      // A transport or decompression failure permits one plain-JSON fallback.
+      // Successfully decoded but invalid JSON/schema must still fail visibly.
+      let compressed;
+      try{compressed=await fetcher(new URL('policy-data.json.gz',baseURL).href,{cache:'no-store',credentials:'omit',headers:{Accept:'application/gzip'}});}catch(error){/* Fall back once below. */}
+      if(compressed?.ok){
+        try{return await decodeGzip(compressed);}
+        catch(error){if(error?.name==='SyntaxError')throw new Error('政策数据不是有效 JSON，请稍后刷新。');}
+      }
+    }
+    const response=await fetcher(new URL('policy-data.json',baseURL).href,{cache:'no-store',credentials:'omit',headers:{Accept:'application/json'}});
+    if(!response.ok)throw new Error(`政策数据读取失败（${response.status}），请稍后刷新。`);
+    try{return await response.json();}catch(error){throw new Error('政策数据不是有效 JSON，请稍后刷新。');}
+  }
   async function refresh(){
     if(loading)return loading;
     loading=(async()=>{
-      const response=await fetcher(new URL('policy-data.json',baseURL).href,{cache:'no-store',credentials:'omit',headers:{Accept:'application/json'}});
-      if(!response.ok)throw new Error(`政策数据读取失败（${response.status}），请稍后刷新。`);
-      let result;try{result=await response.json();}catch(error){throw new Error('政策数据不是有效 JSON，请稍后刷新。');}
-      const next=validate(result);readPersonal(next);snapshot=next;return {generated_at:snapshot.generated_at};
+      const next=validate(await readSnapshot());readPersonal(next);snapshot=next;return {generated_at:snapshot.generated_at};
     })();
     try{return await loading;}finally{loading=null;}
   }
@@ -155,7 +172,7 @@ function createOnline(options) {
   }
   return Object.freeze({api,refresh,exportParameters,exportInfo});
 }
-if(typeof module!=='undefined'&&module.exports)module.exports={createOnline};
+if(typeof module!=='undefined'&&module.exports)module.exports={createOnline,gzipDecoder};
 if(global&&typeof document!=='undefined'){
   const script=document.currentScript;
   global.PolicyOnline=createOnline({baseURL:new URL('./',script?.src||document.baseURI).href,fetch:global.fetch.bind(global),storage:()=>global.localStorage});

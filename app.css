@@ -142,3 +142,12 @@ html{color-scheme:light}body{margin:0;padding:22px;background:#f5f7fa}button{cur
 #pm-business .pm-toolbar .pm-query{flex-basis:100%;margin:0;border:0;border-top:1px solid var(--pm-line);border-radius:0;padding-top:14px}
 #pm-business .pm-toolbar .pm-query:not([open]){display:none}
 @media(max-width:690px){#pm-business .pm-toolbar{padding:10px 12px;gap:10px}#pm-business .pm-toolbar-actions{gap:7px}#pm-business .pm-toolbar #pm-freshness{display:none}#pm-business .pm-toolbar .pm-query .pm-controls,#pm-business .pm-toolbar .pm-query .pm-date-controls,#pm-business .pm-toolbar .pm-query .pm-filterbar,#pm-business .pm-toolbar .pm-query .pm-track-controls{margin-left:0;margin-right:0}}
+
+/* Matter guidance stays behind a small accessible help button. */
+#pm-business .pm-topic-heading{display:flex;align-items:flex-start;gap:6px}
+#pm-business .pm-topic-heading .pm-topic-label{min-width:0;line-height:1.6}
+#pm-business .pm-topic-help{flex:0 0 20px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:1px solid var(--pm-line);border-radius:50%;color:var(--pm-sub);background:var(--pm-paper);font-size:12px;line-height:1}
+#pm-business .pm-topic-help:hover,#pm-business .pm-topic-help[aria-expanded=true]{color:var(--pm-primary);border-color:var(--pm-primary);background:var(--pm-primary-soft)}
+#pm-business .pm-topic-help:focus-visible{outline:2px solid var(--pm-primary);outline-offset:2px}
+#pm-business .pm-topic-help-popover{margin-top:8px;padding:9px 10px;border-left:2px solid var(--pm-primary);border-radius:3px;background:var(--pm-primary-soft);color:var(--pm-sub);font-size:11px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+#pm-business .pm-topic-help-popover[hidden]{display:none}
