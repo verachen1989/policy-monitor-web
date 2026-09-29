@@ -15,8 +15,15 @@ function gzipDecoder(environment){
 function createOnline(options) {
   const baseURL=new URL('./',options.baseURL),fetcher=options.fetch;
   const decodeGzip=options.decodeGzip===undefined?gzipDecoder(global):options.decodeGzip;
+  const gzipTimeoutMs=Number.isFinite(options.gzipTimeoutMs)?Math.max(0,options.gzipTimeoutMs):8000;
   const storageKey='policy-monitor:personal:v1:'+baseURL.pathname;
   let snapshot=null,loading=null;
+  function withTimeout(promise,ms){
+    if(!ms)return promise;
+    let timer;
+    const timeout=new Promise((resolve,reject)=>{timer=setTimeout(()=>reject(new Error('compressed snapshot timed out')),ms);});
+    return Promise.race([promise,timeout]).finally(()=>clearTimeout(timer));
+  }
   function storage(){try{return typeof options.storage==='function'?options.storage():options.storage;}catch(error){throw new Error('无法读取浏览器个人存储；请允许本站使用本地存储后重试。');}}
   function readPersonal(source=snapshot){
     let raw;
@@ -63,9 +70,9 @@ function createOnline(options) {
       // A transport or decompression failure permits one plain-JSON fallback.
       // Successfully decoded but invalid JSON/schema must still fail visibly.
       let compressed;
-      try{compressed=await fetcher(new URL('policy-data.json.gz',baseURL).href,{cache:'no-store',credentials:'omit',headers:{Accept:'application/gzip'}});}catch(error){/* Fall back once below. */}
+      try{compressed=await withTimeout(fetcher(new URL('policy-data.json.gz',baseURL).href,{cache:'no-store',credentials:'omit',headers:{Accept:'application/gzip'}}),gzipTimeoutMs);}catch(error){/* Fall back once below. */}
       if(compressed?.ok){
-        try{return await decodeGzip(compressed);}
+        try{return await withTimeout(decodeGzip(compressed),gzipTimeoutMs);}
         catch(error){if(error?.name==='SyntaxError')throw new Error('政策数据不是有效 JSON，请稍后刷新。');}
       }
     }
