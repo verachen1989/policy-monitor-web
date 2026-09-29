@@ -39,11 +39,15 @@ function createOnline(options) {
     try{const target=storage();target.setItem(storageKey,json);if(target.getItem(storageKey)!==json)throw new Error('write not retained');}
     catch(error){throw new Error('保存到当前浏览器失败，请检查浏览器存储权限和可用空间后重试。');}
   }
+  function manifestPolicies(source){
+    return TRACKS.flatMap(track=>[...(source?.tracks?.[track]?.library?.items||[]),...(source?.tracks?.[track]?.library?.references||[])]);
+  }
   function migratePersonal(value,source){
     // Version IDs locate a snapshot; only the opaque family hash owns a
     // personal exclusion. Migrate exact known identities, never title guesses.
     const identities=new Map();
     for(const current of [snapshot,source])for(const [id,policy] of Object.entries(current?.library_details||{}))if(validPersonalKey(policy.personal_key))identities.set(id,policy.personal_key);
+    for(const current of [snapshot,source])for(const policy of manifestPolicies(current))if(typeof policy.policy_id==='string'&&validPersonalKey(policy.personal_key))identities.set(policy.policy_id,policy.personal_key);
     let changed=false;
     for(const [oldKey,entry] of Object.entries(value.exclusions)){
       let pair;try{pair=JSON.parse(oldKey);}catch(error){continue;}
@@ -66,8 +70,8 @@ function createOnline(options) {
     return typeof value==='string'&&/^details\/(?:library|topic)\/[a-f0-9]{16,64}\.json$/.test(value);
   }
   function validate(value){
-    const fullDetails=record(value.library_details)&&record(value.topic_details);
-    const splitDetails=record(value.detail_paths)&&record(value.detail_paths.library)&&record(value.detail_paths.topic)
+    const fullDetails=record(value?.library_details)&&record(value?.topic_details);
+    const splitDetails=record(value?.detail_paths)&&record(value.detail_paths.library)&&record(value.detail_paths.topic)
       &&Object.values(value.detail_paths.library).every(validDetailPath)&&Object.values(value.detail_paths.topic).every(validDetailPath);
     if(!record(value)||value.schema_version!==1||typeof value.generated_at!=='string'||!record(value.business)||!['items','groups','implementation'].every(key=>Array.isArray(value.business[key]))||!record(value.status)||!record(value.tracks)||(!fullDetails&&!splitDetails)||!record(value.exports)||!TRACKS.every(track=>record(value.tracks[track])&&Array.isArray(value.tracks[track].policies)&&record(value.tracks[track].library)&&Array.isArray(value.tracks[track].library.items)&&Array.isArray(value.tracks[track].library.references)))throw new Error('已发布政策数据格式不完整，请稍后刷新。');
     return value;
@@ -106,7 +110,12 @@ function createOnline(options) {
     })();
     try{return await loading;}finally{loading=null;}
   }
-  async function ready(){if(!snapshot)await refresh();}
+  async function ready(){
+    if(snapshot)return;
+    if(own(options,'initialSnapshot')){
+      const next=validate(options.initialSnapshot);readPersonal(next);snapshot=next;
+    }else await refresh();
+  }
   function trackFor(params){const track=params.get('track')||'delta';if(!TRACKS.includes(track))throw new Error('请选择有效的政策范围。');return snapshot.tracks[track];}
   function visibilityFor(params){const value=params.get('visibility')||'active';if(!['active','excluded','all'].includes(value))throw new Error('请选择有效的显示范围。');return value;}
   function exclusion(personal,id,topic=''){
@@ -159,7 +168,8 @@ function createOnline(options) {
       }
       if(route==='/api/exclusion'){
         if(!knownPolicy(body.policy_id))throw new Error('该政策不在当前快照中，请刷新后重试。');
-        const topic=body.topic_id||'',policy=snapshot.library_details[body.policy_id];
+        const topic=body.topic_id||'',policy=snapshot.library_details?.[body.policy_id]||manifestPolicies(snapshot).find(value=>value.policy_id===body.policy_id)||detailCache.get(`library:${body.policy_id}`);
+        if(!policy)throw new Error('当前快照缺少该政策的身份信息，请刷新数据后重试。');
         const identity=personalKey(policy);
         if(!validPersonalKey(identity))throw new Error('当前发布数据缺少稳定政策标识，请刷新数据后重试。');
         const key=JSON.stringify([identity,topic]);
@@ -201,6 +211,12 @@ function createOnline(options) {
 if(typeof module!=='undefined'&&module.exports)module.exports={createOnline,gzipDecoder};
 if(global&&typeof document!=='undefined'){
   const script=document.currentScript;
-  global.PolicyOnline=createOnline({baseURL:new URL('./',script?.src||document.baseURI).href,fetch:global.fetch.bind(global),storage:()=>global.localStorage});
+  const options={baseURL:new URL('./',script?.src||document.baseURI).href,fetch:global.fetch.bind(global),storage:()=>global.localStorage};
+  const initial=document.getElementById('pm-initial-snapshot');
+  if(initial?.type==='application/json')Object.defineProperty(options,'initialSnapshot',{get(){
+    // Parse during bootstrap so malformed embedded data reaches the page's error UI.
+    try{return JSON.parse(initial.textContent);}catch(error){throw new Error('内嵌政策数据不是有效 JSON，请刷新数据重试。');}
+  }});
+  global.PolicyOnline=createOnline(options);
 }
 })(typeof window==='undefined'?null:window);
