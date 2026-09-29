@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>房地产政策监控表</title><link rel="stylesheet" href="./app.css"><script defer src="./online.js"></script><script defer src="./app.js"></script></head><body>
+<section class="pm-business-page" id="pm-business" aria-label="按业务原表组织的房地产政策监控页面">
+ <h1 class="pm-visually-hidden">房地产政策监控表</h1>
+
+ <header class="pm-toolbar">
+ <nav class="pm-view-tabs" role="tablist" aria-label="政策查看方式"><button id="pm-view-matrix" data-view="matrix" role="tab" aria-selected="true" aria-controls="pm-main-panel">事项监控</button><button id="pm-view-library" data-view="library" role="tab" aria-selected="false" aria-controls="pm-main-panel">政策列表</button></nav>
+ <div class="pm-toolbar-actions"><p class="pm-caption" id="pm-freshness" role="status"></p><button type="button" id="pm-query-summary" disabled class="pm-filter-toggle" aria-expanded="false" aria-controls="pm-query">查询条件</button><button type="button" id="pm-run" class="pm-primary" title="读取已发布的最新政策数据" disabled>刷新数据</button></div>
+  <details id="pm-query" class="pm-query"><summary class="pm-visually-hidden">查询条件</summary>
+   <div class="pm-controls">
+   <label>城市范围<select id="pm-region" aria-label="城市范围"><option value="all">全部城市</option><option value="beijing">北京</option><option value="tianjin">天津</option><option value="shijiazhuang">河北（石家庄）</option><option value="hainan">海南（三亚、陵水）</option><option value="sanya">三亚</option><option value="lingshui">陵水</option></select></label>
+   <label id="pm-group-label">事项分组<select id="pm-group" aria-label="事项分组"></select></label>
+   <label>发布渠道<select id="pm-channel" aria-label="发布渠道"><option value="">全部发布渠道</option></select></label>
+   <label class="pm-search-label">事项 / 政策关键词<input id="pm-search" type="search" maxlength="100" placeholder="例如：按揭、封顶、保函" aria-label="搜索事项或政策关键词"></label>
+  </div>
+  <div class="pm-date-controls">
+   <label>发布日期从<input id="pm-date-from" type="date" aria-label="发布日期开始日期" aria-describedby="pm-publication-note pm-filter-error"></label>
+   <label>发布日期至<input id="pm-date-to" type="date" aria-label="发布日期结束日期" aria-describedby="pm-publication-note pm-filter-error"></label>
+  </div>
+  <div class="pm-track-controls">
+   <label>政策范围<select id="pm-track" aria-label="政策范围"><option value="delta">8.28 起新政</option><option value="baseline">历史基准</option><option value="all">新政与历史基准</option></select></label>
+   <label id="pm-material-label" hidden>文件类型<select id="pm-material" aria-label="文件类型"><option value="formal">正式政策</option><option value="reference">解读参考</option></select></label>
+  </div>
+   <div class="pm-filterbar"><label>显示范围<select id="pm-visibility" aria-label="显示范围"><option value="active">未排除</option><option value="excluded">已排除</option><option value="all">全部</option></select></label><button id="pm-reset" class="pm-reset">重置查询</button><p class="pm-caption" id="pm-publication-note">查询只读取政策库，不影响采集。发布日期留空查询全部已入库日期；国家、省级参考单独标注。</p></div>
+   <p id="pm-filter-error" class="pm-error pm-filter-error" role="alert" hidden></p>
+  </details>
+ </header>
+ <nav id="pm-section-tabs" class="pm-tabs" role="tablist" aria-label="监测事项章节">
+  <button class="pm-section cursor-interaction" role="tab" id="pm-section-implementation" data-section="implementation" aria-selected="false" aria-controls="pm-main-panel">一、实施导则及细则</button>
+  <button class="pm-section cursor-interaction" role="tab" id="pm-section-sales" data-section="sales" aria-selected="true" aria-controls="pm-main-panel">二、商品房销售制度</button>
+  <button class="pm-section cursor-interaction" role="tab" id="pm-section-company" data-section="company" aria-selected="false" aria-controls="pm-main-panel">三、项目公司制</button>
+  <button class="pm-section cursor-interaction" role="tab" id="pm-section-bank" data-section="bank" aria-selected="false" aria-controls="pm-main-panel">四、主办银行制</button>
+  <button class="pm-section" role="tab" id="pm-section-support" data-section="support" aria-selected="false" aria-controls="pm-main-panel">购房金融与支持政策</button>
+ </nav>
+ <main class="pm-main" id="pm-main-panel" role="tabpanel" aria-labelledby="pm-section-sales">
+
+  <div id="pm-run-message" class="pm-run-message" role="status" aria-live="polite"></div>
+  <details id="pm-updates" class="pm-policy-updates" hidden><summary id="pm-updates-label">政策更新</summary><div id="pm-updates-list"></div><button type="button" id="pm-updates-read" class="pm-action">将以上更新标为已读</button></details>
+  <div class="pm-tablebar"><h2 id="pm-table-title">商品房销售制度 <span>21项 · 8组</span></h2><div class="pm-table-actions"><button type="button" id="pm-export" class="pm-export-button" disabled>导出原表</button><button id="pm-expand-all" class="pm-expand cursor-interaction">全部展开</button><button id="pm-collapse-all" class="pm-expand cursor-interaction">全部收起</button></div></div>
+  <div class="pm-workarea" id="pm-workarea"><div class="pm-sheet">
+   <div class="pm-scroll" id="pm-table-wrap"><p class="pm-empty">正在加载业务事项…</p></div>
+   <div class="pm-tablefoot"><span id="pm-table-count" aria-live="polite"></span><span id="pm-table-hint">点击单元格，在右侧查看详情</span></div>
+  </div><aside class="pm-detail" id="pm-detail" hidden aria-label="事项政策详情侧边栏"></aside></div>
+
+  <dialog id="pm-export-dialog" class="pm-export-dialog" aria-labelledby="pm-export-title" aria-describedby="pm-export-intro">
+   <h2 id="pm-export-title">导出飞书原表样式</h2>
+   <p id="pm-export-intro" class="pm-caption">下载 Excel，保留原表四大章节、事项顺序和城市列。</p>
+   <dl class="pm-export-scope"><dt>原始发布日期</dt><dd id="pm-export-period"></dd><dt>城市与渠道</dt><dd id="pm-export-scope"></dd><dt>显示范围</dt><dd id="pm-export-visibility"></dd></dl>
+   <p id="pm-export-filter-note" class="pm-caption">沿用当前政策范围和日期条件；新政默认自 2026-08-28 起，历史基准单独导出。</p>
+   <p class="pm-caption pm-export-note">导出包含全部四章，不受当前页签、事项分组、关键词限制。另附补充事项、政策明细和参考资料。</p>
+   <p id="pm-export-error" class="pm-error" role="alert"></p>
+   <div class="pm-export-actions"><button type="button" id="pm-export-cancel" class="pm-export-button">返回</button><button type="button" id="pm-export-download" class="pm-primary">下载 Excel</button></div>
+  </dialog>
+ </main>
+</section>
+<noscript>请启用 JavaScript 以加载线上监测页面。</noscript></body></html>
