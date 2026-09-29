@@ -178,6 +178,12 @@ function cityCoverage(city) {
 function localCoverage(city) { return normalizeScope(apiCities[city]||city)==='海南'?`三亚：${cityCoverage('sanya')}；陵水：${cityCoverage('lingshui')}`:cityCoverage(city); }
 function displayFilters() { return {channel:state.channel,dateFrom:state.dateFrom,dateTo:state.dateTo,visibility:state.visibility,track:state.track}; }
 function matchingPolicies(id,city) { return visiblePolicies(allPolicies,id,apiCities[city] || city,displayFilters()); }
+function selectedCellPolicies(selection){
+  const city=apiCities[selection.city];
+  const records=matchingPolicies(selection.id,selection.city);
+  if(selection.layer==='national')return records.filter(p=>normalizeScope(p.scope)==='国家');
+  return records.filter(p=>policyRegion(p,city)!=='national');
+}
 async function api(path, body) {
   if(online)return online.api(path,body);
   const headers = {'Accept':'application/json'};
@@ -211,17 +217,18 @@ async function readUpdates(){
   catch(error){runMessage('更新阅读状态未保存：'+error.message,true);}
 }
 function groups(){return data.groups.filter(g=>g.section===state.section);}
-function columns(){return state.region==='all'?['beijing','tianjin','shijiazhuang','hainan']:[state.region];}
+function columns(){return state.region==='all'?['beijing','tianjin','shijiazhuang','sanya','lingshui']:state.region==='hainan'?['sanya','lingshui']:[state.region];}
 function effective(item,city){if(['sanya','lingshui'].includes(city)&&Object.prototype.hasOwnProperty.call(item.values,'hainan'))return {text:item.values.hainan||'',shared:true};return {text:item.values[city]??'',shared:city==='hainan'&&Object.prototype.hasOwnProperty.call(item.values,'hainan')};}
 function matching(){const ids=new Set(groups().map(g=>g.id)),q=state.query.trim().toLowerCase();return data.items.filter(item=>ids.has(item.group)&&(state.group==='all'||item.group===state.group)&&(!q||[item.title,item.focus,data.groups.find(g=>g.id===item.group)?.title,...columns().flatMap(city=>city==='hainan'?['sanya','lingshui']:[city]).flatMap(city=>matchingPolicies(item.id,city)).map(p=>p.title+' '+summaryText(p))].join(' ').toLowerCase().includes(q)));}
 function cell(item,city,small=false) {
-  const selected=state.selected?.id===item.id&&state.selected.city===city;
-  const records=matchingPolicies(item.id,city),scope=apiCities[city]||city;
-  const local=records.filter(p=>policyRegion(p,scope)==='local'),national=records.filter(p=>policyRegion(p,scope)==='national'),provincial=records.filter(p=>policyRegion(p,scope)==='provincial');
-  const counts=policyCounts(allPolicies,item.id,scope,displayFilters());
-  const candidate=local[0],baseline=national[0],reference=provincial[0];
-  const empty=state.visibility==='excluded'?'暂无已排除政策':'暂无已采集政策';
-  return `<button type="button" class="pm-cell" data-cell="${esc(item.id)}|${esc(city)}" aria-pressed="${selected}" aria-label="查看${esc(names[city])}：${esc(item.title)}"><span class="pm-cell-title"><strong>${esc(names[city])}</strong><span>${selected?'查看中':'↗'}</span></span><span class="pm-counts">采集 <b>${counts.collected}</b> 条</span>${candidate?`<span class="pm-value">${esc(summaryText(candidate)||candidate.title)}</span><span class="pm-caption">${esc(candidate.original_date||'发布日期待核实')}${policyDisplayLabel(candidate)?' · '+esc(policyDisplayLabel(candidate)):''}${local.length>1?` · 另有 ${local.length-1} 条`:''}</span>`:`<span class="pm-value pm-pending">${empty}</span>`}${counts.provincialCollected?`<span class="pm-national"><span>省级政策参考 ${counts.provincialCollected} 条</span>${reference?`<span class="pm-national-summary">${esc(summaryText(reference)||reference.title)}</span>`:''}</span>`:''}${counts.nationalCollected?`<span class="pm-national"><span>国家基准 ${counts.nationalCollected} 条</span>${baseline?`<span class="pm-national-summary">${esc(summaryText(baseline)||baseline.title)}</span>`:''}</span>`:''}</button>`;
+  const selected=state.selected?.id===item.id&&state.selected.city===city&&!state.selected.layer;
+  const counts=policyCounts(allPolicies,item.id,apiCities[city]||city,displayFilters());
+  return `<button type="button" class="pm-cell" data-cell="${esc(item.id)}|${esc(city)}" aria-pressed="${selected}" aria-label="查看${esc(names[city])}：${esc(item.title)}，本地${counts.collected}条${counts.provincialCollected?'，省级参考'+counts.provincialCollected+'条':''}">${small?`<span class="pm-cell-title"><strong>${esc(names[city])}</strong></span>`:''}<span class="pm-cell-meta"><span class="pm-cell-count${counts.collected?'':' pm-pending'}">本地 ${counts.collected} 条</span>${counts.provincialCollected?`<span class="pm-reference-count">省级 ${counts.provincialCollected} 条</span>`:''}</span></button>`;
+}
+function baselineCell(item,standalone=false){
+  const records=matchingPolicies(item.id,columns()[0]).filter(p=>normalizeScope(p.scope)==='国家');
+  const selected=state.selected?.id===item.id&&state.selected.layer==='national';
+  return `${standalone?'<div class="pm-implementation-baseline">':'<td class="pm-baseline-cell">'}<button type="button" class="pm-cell" data-baseline="${esc(item.id)}" aria-pressed="${selected}" aria-label="查看${esc(item.title)}的国家基准，${records.length}条">${standalone?'<span class="pm-cell-title"><strong>国家基准</strong></span>':''}<span class="pm-cell-count${records.length?'':' pm-pending'}">${records.length} 条</span></button>${standalone?'</div>':'</td>'}`;
 }
 function topicHeading(item){
   if(!String(item.focus||'').trim())return `<span class="pm-topic-label">${esc(item.title)}</span>`;
@@ -244,17 +251,16 @@ function toggleTopicHelp(button){
   panel.textContent=text;panel.hidden=false;helpAnchor=button;helpPanel=panel;
   button.setAttribute('aria-expanded','true');button.setAttribute('aria-describedby',id);
 }
-function hainanCell(item){return `<td class="pm-hainan">${cell(item,'sanya',true)}${cell(item,'lingshui',true)}</td>`;}
 function renderMatrix(){
   if(renderFilterError())return;
   const items=matching(),cols=columns(),gs=groups().filter(g=>items.some(i=>i.group===g.id));
-  const force=state.group!=='all'||Boolean(state.query.trim()),total=2+cols.length;
-  const width=36+228+cols.reduce((s,c)=>s+(c==='hainan'?230:178),0);
-  const head=`<colgroup><col style="width:36px"><col style="width:228px">${cols.map(c=>`<col style="width:${c==='hainan'?230:178}px">`).join('')}</colgroup><thead><tr><th class="pm-num" scope="col">序号</th><th class="pm-topic" scope="col">监测事项<span>保留原表分组与细项</span></th>${cols.map(c=>`<th scope="col">${esc(names[c])}政策<span>${esc(localCoverage(c))}</span></th>`).join('')}</tr></thead>`;
+  const force=state.group!=='all'||Boolean(state.query.trim()),total=3+cols.length;
+  const width=36+208+120*(cols.length+1);
+  const head=`<colgroup><col style="width:36px"><col style="width:208px"><col style="width:120px">${cols.map(()=>'<col style="width:120px">').join('')}</colgroup><thead><tr><th class="pm-num" scope="col">序号</th><th class="pm-topic" scope="col">监测事项</th><th scope="col">国家基准</th>${cols.map(c=>`<th scope="col">${esc(names[c])}</th>`).join('')}</tr></thead>`;
   let shown=0;
-  let body=gs.map(g=>{const open=force||state.open.includes(g.id),sub=items.filter(i=>i.group===g.id);return `<tr class="pm-group-row"><th colspan="${total}" scope="rowgroup"><button type="button" class="pm-group-button" data-group-toggle="${esc(g.id)}" aria-expanded="${open}"><span class="pm-group-arrow" aria-hidden="true">${open?'▾':'▸'}</span>${g.number?`${g.number}. `:''}${esc(g.title)}<span>${sub.length}项</span></button></th></tr>`+(open?sub.map((item,index)=>{shown++;return `<tr><td class="pm-num">${index+1}</td><th scope="row" class="pm-topic">${topicHeading(item)}</th>${cols.map(c=>c==='hainan'?hainanCell(item):`<td>${cell(item,c)}</td>`).join('')}</tr>`;}).join(''):'');}).join('');
+  let body=gs.map(g=>{const open=force||state.open.includes(g.id),sub=items.filter(i=>i.group===g.id);return `<tr class="pm-group-row"><th colspan="${total}" scope="rowgroup"><button type="button" class="pm-group-button" data-group-toggle="${esc(g.id)}" aria-expanded="${open}"><span class="pm-group-arrow" aria-hidden="true">${open?'▾':'▸'}</span>${g.number?`${g.number}. `:''}${esc(g.title)}<span>${sub.length}项</span></button></th></tr>`+(open?sub.map((item,index)=>{shown++;return `<tr><td class="pm-num">${index+1}</td><th scope="row" class="pm-topic">${topicHeading(item)}</th>${baselineCell(item)}${cols.map(c=>`<td>${cell(item,c)}</td>`).join('')}</tr>`;}).join(''):'');}).join('');
   if(!gs.length)body=`<tr><td colspan="${total}" class="pm-empty">没有匹配的监测事项，可调整筛选或重置。</td></tr>`;
-  $('#pm-table-wrap').innerHTML=`<table style="min-width:${Math.max(width,570)}px" aria-label="${esc(sectionNames[state.section])}城市对照表">${head}<tbody>${body}</tbody></table>`;
+  $('#pm-table-wrap').innerHTML=`<table class="pm-matrix" style="min-width:${Math.max(width,570)}px" aria-label="${esc(sectionNames[state.section])}城市对照表">${head}<tbody>${body}</tbody></table>`;
   $('#pm-table-title').innerHTML=esc(sectionNames[state.section])+` <span>${items.length}项 · ${gs.length}组</span>`;
   $('#pm-table-count').textContent=`当前展开 ${shown}项 / 匹配 ${items.length}项${state.section==='support'?' · 扩展事项':' · 原表共27个监测事项'}`;
 }
@@ -264,7 +270,7 @@ function renderImplementation(){
   if(renderFilterError())return;
   const rows=implementationItems();$('#pm-table-title').textContent=sectionNames.implementation;
   $('#pm-table-count').textContent=`${rows.length}个地区 · 政策范围与生效时间以原文为准`;
-  $('#pm-table-wrap').innerHTML=`<table class="pm-overview" aria-label="省市实施导则出台情况"><colgroup><col style="width:44px"><col style="width:235px"><col style="width:300px"><col style="width:190px"></colgroup><thead><tr><th class="pm-num">序号</th><th class="pm-topic">事项</th><th>事项政策</th><th>采集范围</th></tr></thead><tbody>${rows.map((r,index)=>{const local=splitOverview(r.raw),cities=r.region==='hainan'?(state.region==='all'||state.region==='hainan'?['sanya','lingshui']:[state.region]):[r.region];return `<tr><td class="pm-num">${index+1}</td><th class="pm-topic" scope="row">${esc(r.title)}</th><td>${cities.map(city=>cell({id:'implementation_rules',title:'实施导则及细则',values:{[city]:local[city]||r.raw}},city,true)).join('')}</td><td><span class="pm-caption">${esc(localCoverage(r.region))}<br>未采到文件不作出台结论</span></td></tr>`;}).join('')||'<tr><td colspan="4" class="pm-empty">没有匹配的地区记录</td></tr>'}</tbody></table>`;
+  $('#pm-table-wrap').innerHTML=`${baselineCell({id:'implementation_rules',title:'实施导则及细则'},true)}<table class="pm-overview" aria-label="省市实施导则出台情况"><colgroup><col style="width:44px"><col style="width:235px"><col style="width:300px"><col style="width:190px"></colgroup><thead><tr><th class="pm-num">序号</th><th class="pm-topic">事项</th><th>事项政策</th><th>采集范围</th></tr></thead><tbody>${rows.map((r,index)=>{const local=splitOverview(r.raw),cities=r.region==='hainan'?(state.region==='all'||state.region==='hainan'?['sanya','lingshui']:[state.region]):[r.region];return `<tr><td class="pm-num">${index+1}</td><th class="pm-topic" scope="row">${esc(r.title)}</th><td>${cities.map(city=>cell({id:'implementation_rules',title:'实施导则及细则',values:{[city]:local[city]||r.raw}},city,true)).join('')}</td><td><span class="pm-caption">${esc(localCoverage(r.region))}<br>未采到文件不作出台结论</span></td></tr>`;}).join('')||'<tr><td colspan="4" class="pm-empty">没有匹配的地区记录</td></tr>'}</tbody></table>`;
 }
 function selectedInfo(){if(!state.selected)return null;const{id,city}=state.selected;if(id==='implementation_rules'){const r=data.implementation.find(i=>i.region===city||i.region==='hainan'&&['sanya','lingshui'].includes(city));if(!r)return null;return {id,city,title:'省市房地产新规实施导则及细则出台情况',row:r.row,text:splitOverview(r.raw)[city]||r.raw,focus:'正式出台日期、发文机关、文号及官方原文链接',shared:false,groupTitle:'实施导则及细则'};}const item=data.items.find(i=>i.id===id);return item?{...item,...effective(item,city),city,groupTitle:data.groups.find(g=>g.id===item.group)?.title||''}:null;}
 function block(title,body){return `<div class="pm-detail-block"><h3>${esc(title)}</h3>${body}</div>`;}
@@ -284,13 +290,16 @@ function numericRules(p){
   }).join('')+`<p class="pm-caption">${esc(note)}</p>`);
 }
 function textList(values,keywords=[]){const entries=list(values);return entries.length?`<ul>${entries.map(v=>`<li>${highlightText(human(v),keywords)}</li>`).join('')}</ul>`:'<p class="pm-caption">未提取到，需核验原文。</p>';}
-function noPolicy(item){return `<div class="pm-info"><p>${state.loading?'正在读取政策…':state.detailError?esc(state.detailError):state.visibility==='excluded'?'该事项暂无已排除政策。':'该事项暂无已采集政策。'}</p><p>${esc(localCoverage(item.city))}；未采到文件不作出台结论。</p></div>`;}
+function noPolicy(item){
+  if(state.selected?.layer==='national')return `<div class="pm-info"><p>${state.loading?'正在读取国家基准…':state.detailError?esc(state.detailError):'该事项暂无符合查询条件的国家基准。'}</p></div>`;
+  return `<div class="pm-info"><p>${state.loading?'正在读取政策…':state.detailError?esc(state.detailError):state.visibility==='excluded'?'该事项暂无已排除政策。':'该事项暂无已采集政策。'}</p><p>${esc(localCoverage(item.city))}；未采到文件不作出台结论。</p></div>`;
+}
 function sourceMeta(p){
   const isNational=normalizeScope(p.scope)==='国家',isProvincial=policyRegion(p,apiCities[state.selected?.city])==='provincial';
   const sources=list(p.official_sources),urls=new Set();
   const official=sources.filter(source=>{const url=source.url || source.source_url;if(!url || urls.has(url))return false;urls.add(url);return true;});
   const channels=[...new Set([...(p.channels||[]),...official.map(source=>source.channel).filter(Boolean)])].map(id=>publicationChannels.find(channel=>channel.id===id)?.label||official.find(source=>source.channel===id)?.channel_label||id);
-  return `<div class="pm-policy-meta"><p class="pm-policy-title">${esc(p.title||'政策标题待核实')}</p><p class="${isNational||isProvincial?'pm-national-label':''}">${esc(isNational?'国家基准：不等于本地落地执行':isProvincial?`省级政策参考：${p.scope}；城市执行细则需另行核实`:`适用范围：${p.scope_label||p.scope||'待核实'}`)}${policyDisplayLabel(p)?' · '+esc(policyDisplayLabel(p)):''}</p>${channels.length?`<p>发布渠道：${esc(channels.join('、'))}</p>`:''}${p.issuer?`<p>发文机关：${esc(p.issuer)}</p>`:''}${p.source_issuer&&p.source_issuer!==p.issuer?`<p>${p.issuer?'转载来源':'采集来源'}：${esc(p.source_issuer)}</p>`:''}<p>${identityDates(p)}</p><p>${esc(p.evidence_status_label||policyNatureLabel(p))}</p>${p.effective_date_rule?`<p>生效依据：${esc(human(p.effective_date_rule))}</p>`:''}${p.doc_no?`<p>${esc(p.doc_no)}</p>`:''}<p>${official.length?official.map((source,index)=>link(source.url||source.source_url,`官方原文${official.length>1?' '+(index+1):''}${source.channel_label?' · '+source.channel_label:''}`)).join(' · '):link(p.source_url||p.url,'官方原文')}</p>${p.source_conflict?'<p class="pm-caution">原文存在差异，待核实。</p>':''}</div>`;
+  return `<details class="pm-source-disclosure"><summary>发文信息与日期</summary><div class="pm-policy-meta"><p class="pm-policy-title">${esc(p.title||'政策标题待核实')}</p><p class="${isNational||isProvincial?'pm-national-label':''}">${esc(isNational?'国家基准：不等于本地落地执行':isProvincial?`省级政策参考：${p.scope}；城市执行细则需另行核实`:`适用范围：${p.scope_label||p.scope||'待核实'}`)}${policyDisplayLabel(p)?' · '+esc(policyDisplayLabel(p)):''}</p>${channels.length?`<p>发布渠道：${esc(channels.join('、'))}</p>`:''}${p.issuer?`<p>发文机关：${esc(p.issuer)}</p>`:''}${p.source_issuer&&p.source_issuer!==p.issuer?`<p>${p.issuer?'转载来源':'采集来源'}：${esc(p.source_issuer)}</p>`:''}<p>${identityDates(p)}</p><p>${esc(p.evidence_status_label||policyNatureLabel(p))}</p>${p.effective_date_rule?`<p>生效依据：${esc(human(p.effective_date_rule))}</p>`:''}${p.doc_no?`<p>${esc(p.doc_no)}</p>`:''}<p>${official.length?official.map((source,index)=>link(source.url||source.source_url,`官方原文${official.length>1?' '+(index+1):''}${source.channel_label?' · '+source.channel_label:''}`)).join(' · '):link(p.source_url||p.url,'官方原文')}</p>${p.source_conflict?'<p class="pm-caution">原文存在差异，待核实。</p>':''}</div></details>`;
 }
 function renderEvidence(p){
   const provisions=list(p.provisions || p.summary?.provisions),conditions=list(p.conditions || p.summary?.conditions);
@@ -308,13 +317,13 @@ function exclusionActions(p,item=null){
   return `<div class="pm-exclusion"><p class="pm-caption">${explanation}${online?' 仅当前浏览器，不影响其他人。':''}</p>${p.exclusion_note?`<p class="pm-caption">排除说明：${esc(p.exclusion_note)}</p>`:''}<label>说明（选填）<textarea id="pm-exclusion-note" rows="2" maxlength="2000" placeholder="记录排除原因或恢复说明">${esc(state.exclusionDraft)}</textarea></label><div class="pm-exclusion-actions"><button type="button" data-exclude="${!excluded}" data-exclusion-topic="${esc(topicId)}" ${detailBusy||!p.policy_id?'disabled':''}>${label}</button></div></div>`;
 }
 function noteForm(p,item){
-  return block('事项备注',`${online?'<p class="pm-caption">仅当前浏览器，不上传或共享。</p>':''}<textarea id="pm-note" rows="3" maxlength="2000" placeholder="记录该城市、事项需核实的问题">${esc(state.notes[noteKey()]||'')}</textarea><button type="button" class="pm-action" id="pm-save-note" ${detailBusy?'disabled':''}>保存备注</button>${state.noteError?`<p class="pm-error">${esc(state.noteError)}</p>`:''}`)+(p?block('排除 / 恢复',exclusionActions(p,item)):noPolicy(item));
+  return block('事项备注',`${online?'<p class="pm-caption">仅当前浏览器，不上传或共享。</p>':''}<textarea id="pm-note" rows="3" maxlength="2000" placeholder="记录该城市、事项需核实的问题">${esc(state.notes[noteKey()]||'')}</textarea><button type="button" class="pm-action" id="pm-save-note" ${detailBusy||state.loading?'disabled':''}>保存备注</button>${state.noteError?`<p class="pm-error">${esc(state.noteError)}</p>`:''}`)+(p?block('排除 / 恢复',exclusionActions(p,item)):'');
 }
 function renderDetail(){
   if(state.detailMode==='library'){renderLibraryDetail();return;}
   const item=selectedInfo();$('#pm-detail').hidden=!item;if(!item)return;
-  const p=state.policy,tab=state.detailTab;
-  const history=online?'':`<details class="pm-history"><summary>历史填报（原业务表）</summary><div class="pm-quote">${esc(item.text||'原表未填写')}</div><p class="pm-caption">${item.shared?'海南合并反馈，具体适用城市待核实。':''}快照 ${esc(data.snapshot_date||'未知')}；历史填报不能代替当前政策。${link(data.reference_url,'原监测表')}</p></details>`;
+  const p=state.policy,tab=state.detailTab,baseline=state.selected.layer==='national';
+  const history=online||baseline?'':`<details class="pm-history"><summary>历史填报（原业务表）</summary><div class="pm-quote">${esc(item.text||'原表未填写')}</div><p class="pm-caption">${item.shared?'海南合并反馈，具体适用城市待核实。':''}快照 ${esc(data.snapshot_date||'未知')}；历史填报不能代替当前政策。${link(data.reference_url,'原监测表')}</p></details>`;
   let body='';
   if(tab==='summary'){
     if(p){
@@ -326,15 +335,26 @@ function renderDetail(){
       });
       body=numericRules(p)+block('事项要点',`<p>${highlightText(excerpt||'本事项暂无可用的政策要点。',topicKeywords(item.id))}</p>`)
         +(extraConditions.length?block('适用条件 / 例外',textList(extraConditions,topicKeywords(item.id))):'')
-        +(list(p.unresolved||p.summary?.unresolved).length?block('待核实',textList(p.unresolved||p.summary?.unresolved)):'')+referenceMaterials(p)+exclusionActions(p,item);
+        +(list(p.unresolved||p.summary?.unresolved).length?block('待核实',textList(p.unresolved||p.summary?.unresolved)):'')+referenceMaterials(p);
     }else body=noPolicy(item);
   }
   if(tab==='evidence')body=p?renderEvidence(p):noPolicy(item);
   if(tab==='changes')body=p?block('与此前政策的变化',textList(p.changes||p.summary?.changes))+block('判定说明','<p class="pm-caption">文件更新不自动替代既有政策；效力关系和项目适用性需结合原文核实。</p>'):noPolicy(item);
   if(tab==='notes')body=noteForm(p,item);
-  const optionGroup=(label,region)=>{const records=state.cellDocs.filter(d=>policyRegion(d,apiCities[item.city])===region);return records.length?`<optgroup label="${label}">${records.map(d=>`<option value="${esc(d.version_id)}" ${String(d.version_id)===String(state.selectedVersion)?'selected':''}>${esc(d.original_date||'日期待核实')} · ${esc(d.title)}${policyDisplayLabel(d)?' · '+esc(policyDisplayLabel(d)):''}</option>`).join('')}</optgroup>`:'';};
-  const options=optionGroup('地方政策','local')+optionGroup('省级政策参考（城市执行细则需核实）','provincial')+optionGroup('国家基准（不代表地方执行）','national');
-  $('#pm-detail').innerHTML=`${state.view==='library'&&state.libraryId?'<button type="button" id="pm-back-policy" class="pm-back-policy">← 返回整份政策</button>':''}<div class="pm-detail-header"><div><p>${esc(names[item.city])} / ${esc(item.groupTitle)}</p><h2>${esc(item.title)}</h2></div><button type="button" class="pm-close" id="pm-close" aria-label="关闭详情侧边栏">关闭</button></div><div class="pm-policy-selector"><label>相关政策（${state.cellDocs.length}条）<select id="pm-document" aria-label="选择政策" ${state.loading||!state.cellDocs.length?'disabled':''}>${options||`<option>暂无符合显示范围的政策</option>`}</select></label></div>${p?sourceMeta(p):''}<div class="pm-detail-tabs" role="tablist" aria-label="事项政策详情">${[['summary','事项总结'],['evidence','政策依据'],['changes','政策变化'],['notes','事项备注']].map(([k,label])=>`<button type="button" class="pm-detail-tab" role="tab" id="pm-tab-${k}" data-detail-tab="${k}" aria-selected="${k===tab}" aria-controls="pm-detail-content">${label}</button>`).join('')}</div><div class="pm-detail-content" id="pm-detail-content" role="tabpanel" aria-labelledby="pm-tab-${tab}">${body}<p class="pm-success" role="status">${esc(state.notice)}</p>${history}</div>`;
+  const optionGroup=(label,region)=>{
+    const records=state.cellDocs.filter(d=>policyRegion(d,apiCities[item.city])===region);
+    const open=true;
+    return records.length?`<details class="pm-policy-group" ${open?'open':''}><summary>${label}<span>${records.length}条</span></summary>${records.map(d=>`<button type="button" class="pm-policy-option" data-policy-version="${esc(d.version_id)}" aria-pressed="${String(d.version_id)===String(state.selectedVersion)}" ${state.loading?'disabled':''}><span class="pm-policy-option-date">${esc(d.original_date||'日期待核实')}</span><span class="pm-policy-option-title">${esc(d.title)}${policyDisplayLabel(d)?' · '+esc(policyDisplayLabel(d)):''}</span></button>`).join('')}</details>`:'';
+  };
+  const options=optionGroup('本地政策','local')+optionGroup('省级参考','provincial')+optionGroup('国家基准','national');
+  const emptyPolicyText=baseline?'暂无符合查询条件的国家基准政策':'暂无符合查询条件的本地政策';
+  const policyList=state.cellDocs.length?`<div class="pm-policy-list"><h3>相关政策（${state.cellDocs.length}条）</h3><div class="pm-policy-list-head"><span title="原始发布日期">发布时间</span><span>政策名称</span></div>${options}</div>`:`<p class="pm-caption pm-empty-policy-list">${emptyPolicyText}</p>`;
+  const scope=p?policyRegion(p,apiCities[item.city]):null;
+  const selectedPolicy=p?`<div class="pm-selected-policy"><p class="pm-policy-title">${esc(p.title)}</p><p class="pm-caption">${esc(p.original_date||'日期待核实')} · ${esc(scope==='national'?'国家基准':scope==='provincial'?'省级参考':p.scope_label||p.scope||'范围待核实')} · ${link(p.source_url||p.url||p.official_sources?.[0]?.url||p.official_sources?.[0]?.source_url,'官方原文')}</p>${scope==='national'?'<p class="pm-caption">国家要求；本地执行需结合地方细则。</p>':scope==='provincial'?'<p class="pm-caption">省级规定；具体城市执行口径需核实。</p>':''}</div>`:'';
+  const tabs=[['summary','事项要点'],['evidence','政策依据'],['changes','政策变化'],...(!baseline?[['notes','事项备注']]:[])];
+  const header=`${state.view==='library'&&state.libraryId?'<button type="button" id="pm-back-policy" class="pm-back-policy">← 返回整份政策</button>':''}<div class="pm-detail-header"><div><p>${esc(baseline?'国家基准':names[item.city])} / ${esc(item.groupTitle)}</p><h2>${esc(item.title)}</h2></div><button type="button" class="pm-close" id="pm-close" aria-label="关闭详情侧边栏">关闭</button></div>`;
+  if(!state.selectedVersion){$('#pm-detail').innerHTML=header+policyList+(!baseline?`<details class="pm-source-disclosure pm-list-notes"><summary>事项备注</summary>${noteForm(null,item)}</details>`:'')+`<p class="pm-success" role="status">${esc(state.notice)}</p>`+history;return;}
+  $('#pm-detail').innerHTML=header+`<button type="button" class="pm-back-list" id="pm-back-policies">← 返回政策列表</button><div class="pm-detail-tabs" role="tablist" aria-label="事项政策详情">${tabs.map(([k,label])=>`<button type="button" class="pm-detail-tab" role="tab" id="pm-tab-${k}" data-detail-tab="${k}" aria-selected="${k===tab}" aria-controls="pm-detail-content">${label}</button>`).join('')}</div><div class="pm-detail-content" id="pm-detail-content" role="tabpanel" aria-labelledby="pm-tab-${tab}">${selectedPolicy}${body}${p?sourceMeta(p):''}${p&&tab!=='notes'?`<details class="pm-source-disclosure"><summary>排除设置</summary>${exclusionActions(p,item)}</details>`:''}<p class="pm-success" role="status">${esc(state.notice)}</p>${history}</div>`;
 }
 function topicTitle(id){return id==='implementation_rules'?'实施导则及细则':data.items.find(item=>item.id===id)?.title||id;}
 function topicLabel(id){
@@ -449,24 +469,24 @@ async function loadCell(preferredVersion=null,directPolicy=null){
   if(!state.selected)return;
   const sequence=++cellSequence,selection={...state.selected},key=noteKey();
   detailSequence++;state.loading=true;state.detailError='';state.noteError='';state.policy=null;state.selectedVersion=null;
-  state.cellDocs=matchingPolicies(selection.id,selection.city);
+  state.cellDocs=selectedCellPolicies(selection);
   if(directPolicy&&!state.cellDocs.some(d=>d.version_id===directPolicy.version_id))state.cellDocs.push(directPolicy);
   state.cellDocs=orderTopicPolicies(state.cellDocs,apiCities[selection.city]);
   renderDetail();
-  try {const result=await api('/api/notes?'+new URLSearchParams({topic_id:selection.id,city:apiCities[selection.city]}));if(sequence===cellSequence&&!state.noteDirty[key])state.notes[key]=result.note||'';}
+  try {if(selection.layer!=='national'){const result=await api('/api/notes?'+new URLSearchParams({topic_id:selection.id,city:apiCities[selection.city]}));if(sequence===cellSequence&&!state.noteDirty[key])state.notes[key]=result.note||'';}}
   catch {if(sequence===cellSequence)state.noteError='已有备注暂时无法读取，请重新打开事项后再保存。';}
   if(sequence!==cellSequence||!state.selected)return;
   state.loading=false;renderDetail();
-  const chosen=state.cellDocs.find(d=>String(d.version_id)===String(preferredVersion))||state.cellDocs[0];
+  const chosen=preferredVersion?state.cellDocs.find(d=>String(d.version_id)===String(preferredVersion)):null;
   if(chosen)await loadPolicy(chosen.version_id);
 }
-function openCell(value){const[id,city]=value.split('|');if(!names[city])return;state.detailMode='topic';if(!state.selected)beforeDetailScroll=$('#pm-table-wrap').scrollLeft;detailSequence++;state.selected={id,city};state.notice='';state.detailTab='summary';state.policy=null;state.cellDocs=[];render();loadCell();}
+function openCell(value,layer=null){const[id,city]=value.split('|');if(!names[city])return;state.detailMode='topic';if(!state.selected)beforeDetailScroll=$('#pm-table-wrap').scrollLeft;detailSequence++;state.selected={id,city,layer};state.notice='';state.detailTab='summary';state.policy=null;state.selectedVersion=null;state.cellDocs=[];render();loadCell();}
 async function saveNote(){
   if(!state.selected||detailBusy)return;
   if(state.noteError){state.notice='操作失败：已有备注未成功读取，请重新打开事项后再保存。';renderDetail();return;}
   const selection={...state.selected},key=noteKey(),note=$('#pm-note').value;state.notes[key]=note;detailBusy=true;renderDetail();
-  try{await api('/api/notes',{topic_id:selection.id,city:apiCities[selection.city],note});state.noteDirty[key]=false;if(noteKey()===key)state.notice=online?'已保存，仅当前浏览器可见。':'已保存至本机，未写入飞书。';}
-  catch(error){if(noteKey()===key)state.notice=`操作失败：${error.message}`;}
+  try{await api('/api/notes',{topic_id:selection.id,city:apiCities[selection.city],note});state.noteDirty[key]=false;if(noteKey()===key&&state.selected?.layer===selection.layer)state.notice=online?'已保存，仅当前浏览器可见。':'已保存至本机，未写入飞书。';}
+  catch(error){if(noteKey()===key&&state.selected?.layer===selection.layer)state.notice=`操作失败：${error.message}`;}
   finally{detailBusy=false;renderDetail();}
 }
 async function setExclusion(excluded,topicId='',exactTopic=false){
@@ -496,6 +516,10 @@ async function refreshPolicies(){
   if(sequence!==listSequence)return;
   allPolicies=list(response.items);policyLibrary=list(library.items);policyReferences=list(library.references);libraryStats=library.stats||{};
   const scroll=$('#pm-table-wrap').scrollLeft;renderResults();$('#pm-table-wrap').scrollLeft=scroll;
+  if(state.selected&&!state.selectedVersion){
+    state.cellDocs=orderTopicPolicies(selectedCellPolicies(state.selected),apiCities[state.selected.city]);
+    renderDetail();
+  }
 }
 async function refreshStatus(){status=await api('/api/business-status');connected=true;renderStatus();await refreshEvents();}
 async function poll(){
@@ -581,13 +605,16 @@ root.addEventListener('click',event=>{
   else if(b.id==='pm-back-policy'&&state.libraryId)openLibraryPolicy(state.libraryId);
   else if(b.dataset.section){state.section=b.dataset.section;state.group='all';state.open=groups().map(g=>g.id);if(state.section==='sales')state.open=['cutoff','presale'];clearDetail();render();}
   else if(b.dataset.groupToggle){state.query='';state.group='all';const id=b.dataset.groupToggle;state.open=state.open.includes(id)?state.open.filter(x=>x!==id):[...state.open,id];render();}
+  else if(b.dataset.baseline)openCell(`${b.dataset.baseline}|${columns()[0]}`,'national');
   else if(b.dataset.cell)openCell(b.dataset.cell);
+  else if(b.dataset.policyVersion){state.detailTab='summary';loadPolicy(b.dataset.policyVersion);$('#pm-detail').scrollTop=0;}
+  else if(b.id==='pm-back-policies'){detailSequence++;state.selectedVersion=null;state.policy=null;state.loading=false;state.detailError='';state.notice='';state.detailTab='summary';state.cellDocs=orderTopicPolicies(selectedCellPolicies(state.selected),apiCities[state.selected.city]);renderDetail();$('#pm-detail').scrollTop=0;}
   else if(b.dataset.detailTab){state.detailTab=b.dataset.detailTab;state.notice='';renderDetail();}
   else if(b.dataset.restoreTopic)setExclusion(false,b.dataset.restoreTopic,true);
   else if(b.dataset.exclude!==undefined)setExclusion(b.dataset.exclude==='true',b.dataset.exclusionTopic||'');
   else if(b.id==='pm-reset'){state.region='all';state.group='all';state.query='';state.channel='';state.dateFrom='';state.dateTo='';const visibilityChanged=state.visibility!=='active'||state.track!=='delta';state.visibility='active';state.track='delta';state.material='formal';if(visibilityChanged){allPolicies=[];policyLibrary=[];policyReferences=[];}clearDetail();render();if(visibilityChanged)refreshPolicies().catch(error=>runMessage('查询失败：'+error.message,true));}
   else if(b.id==='pm-expand-all'||b.id==='pm-collapse-all'){state.query='';state.group='all';state.open=b.id==='pm-expand-all'?groups().map(g=>g.id):[];clearDetail();render();}
-  else if(b.id==='pm-close'){const selected=state.selected,libraryId=state.libraryId;clearDetail();render();$('#pm-table-wrap').scrollLeft=beforeDetailScroll;if(libraryId)Array.from(root.querySelectorAll('[data-library-policy]')).find(el=>el.dataset.libraryPolicy===libraryId)?.focus({preventScroll:true});else if(selected)Array.from(root.querySelectorAll('[data-cell]')).find(el=>el.dataset.cell===`${selected.id}|${selected.city}`)?.focus({preventScroll:true});}
+  else if(b.id==='pm-close'){const selected=state.selected,libraryId=state.libraryId;clearDetail();render();$('#pm-table-wrap').scrollLeft=beforeDetailScroll;if(libraryId)Array.from(root.querySelectorAll('[data-library-policy]')).find(el=>el.dataset.libraryPolicy===libraryId)?.focus({preventScroll:true});else if(selected)Array.from(root.querySelectorAll(selected.layer==='national'?'[data-baseline]':'[data-cell]')).find(el=>selected.layer==='national'?el.dataset.baseline===selected.id:el.dataset.cell===`${selected.id}|${selected.city}`)?.focus({preventScroll:true});}
   else if(b.id==='pm-save-note')saveNote();
   else if(b.id==='pm-run')startRun();
   else if(b.id==='pm-export')showExport();
@@ -602,7 +629,6 @@ $('#pm-search').addEventListener('input',e=>{state.query=e.target.value;clearDet
 $('#pm-visibility').addEventListener('change',e=>{state.visibility=e.target.value;clearDetail();render();refreshPolicies().catch(error=>runMessage('查询失败：'+error.message,true));});
 for(const [id,key] of [['#pm-channel','channel'],['#pm-date-from','dateFrom'],['#pm-date-to','dateTo']])$(id).addEventListener('change',e=>{state[key]=e.target.value;clearDetail();render();});
 // Query changes only read and filter stored records; collection has a separate fixed contract.
-root.addEventListener('change',e=>{if(e.target.id==='pm-document')loadPolicy(e.target.value);});
 root.addEventListener('input',e=>{if(e.target.id==='pm-note'&&state.selected){state.notes[noteKey()]=e.target.value;state.noteDirty[noteKey()]=true;}if(e.target.id==='pm-exclusion-note')state.exclusionDraft=e.target.value;});
 root.addEventListener('keydown',e=>{if(e.key==='Escape'&&helpAnchor){closeTopicHelp(true);e.stopPropagation();return;}if(e.key==='Escape'&&!$('#pm-export-dialog').open&&(state.selected||state.libraryId))$('#pm-close')?.click();});
 document.addEventListener?.('click',event=>{if(helpAnchor&&!helpAnchor.contains(event.target)&&!helpPanel.contains(event.target))closeTopicHelp();});

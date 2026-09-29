@@ -151,3 +151,68 @@ html{color-scheme:light}body{margin:0;padding:22px;background:#f5f7fa}button{cur
 #pm-business .pm-topic-help:focus-visible{outline:2px solid var(--pm-primary);outline-offset:2px}
 #pm-business .pm-topic-help-popover{margin-top:8px;padding:9px 10px;border-left:2px solid var(--pm-primary);border-radius:3px;background:var(--pm-primary-soft);color:var(--pm-sub);font-size:11px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
 #pm-business .pm-topic-help-popover[hidden]{display:none}
+
+/* Compact business matrix: policy counts with a shared national column. */
+#pm-business .pm-matrix .pm-cell{display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:4px;min-height:50px;height:100%;padding:8px 11px;text-align:left}
+#pm-business .pm-matrix .pm-cell-title{display:none}
+#pm-business .pm-matrix .pm-cell-summary{display:none}
+#pm-business .pm-matrix .pm-cell-meta{display:flex;align-items:center;gap:3px 8px;flex-wrap:wrap;margin-top:0;color:var(--pm-sub);font-size:12px;line-height:18px;font-variant-numeric:tabular-nums}
+#pm-business .pm-matrix .pm-cell-meta .pm-caption{margin:0;font-size:inherit}
+#pm-business .pm-matrix .pm-cell-count{color:var(--pm-primary);font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}
+#pm-business .pm-matrix .pm-cell-count.pm-pending{color:var(--pm-sub);font-weight:400}
+#pm-business .pm-matrix .pm-reference-count{color:var(--pm-sub);font-size:10px;font-weight:400;line-height:15px;white-space:nowrap}
+#pm-business .pm-matrix .pm-baseline-cell{background:var(--pm-head)}
+#pm-business .pm-matrix .pm-baseline-cell>.pm-cell{background:transparent}
+#pm-business .pm-matrix .pm-cell:hover{background:var(--pm-primary-soft)}
+#pm-business .pm-matrix .pm-cell[aria-pressed=true]{background:var(--pm-blue-bg);box-shadow:inset 3px 0 0 var(--pm-primary),inset 0 0 0 1px var(--pm-primary)}
+#pm-business .pm-matrix .pm-cell:focus-visible{outline:2px solid var(--pm-primary);outline-offset:-2px}
+#pm-business .pm-matrix tbody .pm-num{padding-top:12px;font-size:11px}
+#pm-business .pm-matrix .pm-topic{padding:11px 12px;box-shadow:1px 0 0 var(--pm-line)}
+#pm-business .pm-matrix .pm-topic-heading{gap:5px}
+#pm-business .pm-matrix .pm-group-button{padding:7px 12px;font-size:12px}
+
+/* Related documents remain separate, readable choices within each policy level. */
+#pm-business .pm-policy-list{display:grid;gap:7px;padding:12px 14px;border-bottom:1px solid var(--pm-line)}
+#pm-business .pm-policy-list-head{display:grid;grid-template-columns:90px minmax(0,1fr);gap:10px;padding:7px 12px;color:var(--pm-sub);background:var(--pm-head);border-radius:4px;font-size:11px;font-weight:500;line-height:1.5}
+#pm-business .pm-policy-group{margin:0;border:1px solid var(--pm-line);border-radius:6px;background:var(--pm-paper)}
+#pm-business .pm-policy-group>summary{display:flex;align-items:center;gap:7px;padding:8px 10px;list-style:none;border-radius:5px;color:var(--pm-sub);font-size:12px;font-weight:500;line-height:1.5}
+#pm-business .pm-policy-group>summary::-webkit-details-marker{display:none}
+#pm-business .pm-policy-group>summary::before{content:'›';display:inline-block;width:8px;flex:0 0 8px;color:var(--pm-sub);font-size:16px;font-weight:400;line-height:1;transform-origin:center}
+#pm-business .pm-policy-group[open]>summary{color:var(--pm-ink)}
+#pm-business .pm-policy-group[open]>summary::before{transform:rotate(90deg)}
+#pm-business .pm-policy-option{display:grid;grid-template-columns:90px minmax(0,1fr);align-items:start;gap:10px;width:100%;min-height:48px;padding:9px 11px;border-top:1px solid var(--pm-line);border-radius:0;color:var(--pm-ink);background:var(--pm-paper);text-align:left}
+#pm-business .pm-policy-option:last-child{border-radius:0 0 5px 5px}
+#pm-business .pm-policy-option-title{display:block;min-width:0;font-size:12px;line-height:1.65;font-weight:400;overflow-wrap:anywhere}
+#pm-business .pm-policy-option-date{display:block;margin:0;color:var(--pm-sub);font-size:11px;line-height:1.8;white-space:nowrap;font-variant-numeric:tabular-nums}
+#pm-business .pm-policy-option:hover{background:var(--pm-bg)}
+#pm-business .pm-policy-option[aria-pressed=true]{background:var(--pm-primary-soft);box-shadow:inset 3px 0 0 var(--pm-primary)}
+#pm-business .pm-policy-option[aria-pressed=true] .pm-policy-option-title{color:var(--pm-primary);font-weight:500}
+#pm-business .pm-policy-option:focus-visible{outline:2px solid var(--pm-primary);outline-offset:-2px}
+#pm-business .pm-back-list{display:inline-flex;align-items:center;gap:5px;min-height:34px;margin:4px 8px;padding:6px 8px;border-radius:4px;color:var(--pm-primary);font-size:12px;line-height:1.5}
+#pm-business .pm-back-list:hover{background:var(--pm-primary-soft)}
+#pm-business .pm-back-list:focus-visible{outline:2px solid var(--pm-primary);outline-offset:1px}
+#pm-business .pm-selected-policy{padding:12px 16px;border-bottom:1px solid var(--pm-line);background:var(--pm-paper);overflow-wrap:anywhere}
+#pm-business .pm-selected-policy .pm-policy-title,#pm-business .pm-selected-policy h3{margin:0 0 6px!important;color:var(--pm-ink);font-size:13px;font-weight:500;line-height:1.6}
+#pm-business .pm-selected-policy .pm-caption{font-size:11px;line-height:1.6}
+#pm-business .pm-selected-policy a{display:inline-block;margin-top:5px;color:var(--pm-primary);font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+#pm-business.pm-business-page .pm-detail .pm-source-disclosure{margin-top:14px;padding-top:10px;border-top:1px solid var(--pm-line);color:var(--pm-sub);font-size:12px}
+#pm-business.pm-business-page .pm-detail .pm-source-disclosure>summary{padding:2px 0;color:var(--pm-primary);font-size:12px;line-height:1.6}
+#pm-business.pm-business-page .pm-detail .pm-source-disclosure .pm-policy-meta{padding:9px 0 0;border:0;background:transparent;font-size:11px;line-height:1.7}
+
+@media(max-width:690px){
+ #pm-business .pm-matrix col:nth-child(2){width:140px!important}
+ #pm-business .pm-matrix .pm-topic{left:30px;width:140px;min-width:140px;padding:10px 9px}
+ #pm-business .pm-matrix .pm-topic-heading{gap:4px}
+ #pm-business .pm-matrix .pm-topic-label{font-size:12px;line-height:1.6}
+ #pm-business .pm-matrix .pm-cell{padding:8px 10px;min-height:50px}
+ #pm-business .pm-policy-list{padding:10px 12px}
+ #pm-business .pm-policy-option{padding:10px 11px}
+ #pm-business .pm-selected-policy{padding:12px 14px}
+}
+
+#pm-business .pm-implementation-baseline{border-bottom:1px solid var(--pm-line);background:var(--pm-head)}
+#pm-business .pm-implementation-baseline .pm-cell{min-height:0;padding:12px 14px;text-align:left}
+#pm-business .pm-implementation-baseline .pm-cell-meta{display:flex;gap:12px;margin-top:6px;color:var(--pm-sub);font-size:11px}
+#pm-business .pm-implementation-baseline .pm-cell-count{color:var(--pm-primary)}
+#pm-business .pm-overview .pm-cell-meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;color:var(--pm-sub);font-size:11px}
+#pm-business .pm-overview .pm-cell-count{color:var(--pm-primary)}
