@@ -197,10 +197,11 @@ function runMessage(message,isError=false) { $('#pm-run-message').textContent=me
 function renderStatus() {
   $('#pm-query-summary').disabled=!connected;
   if(status.running)runMessage('正在检查官方政策，已有政策仍可查看。');
-  $('#pm-run').disabled=(!online&&!connected) || Boolean(status.running) || requestBusy;
+  const runButton=$('#pm-run');
+  if(runButton)runButton.disabled=(!online&&!connected) || Boolean(status.running) || requestBusy;
   $('#pm-export').disabled=!connected || exportBusy;
-  $('#pm-run').textContent=online?(requestBusy?'刷新中…':'刷新数据'):status.running ? '采集中…' : requestBusy ? '提交中…' : '采集';
-  if(online)$('#pm-run').title='读取已发布的最新政策数据';
+  if(runButton)runButton.textContent=status.running ? '采集中…' : requestBusy ? '提交中…' : '采集';
+  if(runButton&&online)runButton.hidden=true;
   $('#pm-freshness').textContent=online?`最近检查 ${shortDate(status.last_checked_at||status.last_updated)}${status.collection_status==='partial'?' · 部分完成':status.collection_status==='failed'?' · 检查失败':''}`:status.last_updated?'最近采集 '+shortDate(status.last_updated):'尚无采集记录';
 }
 async function refreshEvents(){
@@ -566,9 +567,9 @@ async function downloadExport() {
   try{
     const info=online?online.exportInfo(request):null;
     const response=online?await fetch(info.url,{credentials:'omit',cache:'no-store'}):await fetch('/api/export.xlsx?'+new URLSearchParams(request),{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}});
-    if(!response.ok){if(online)throw new Error(`快照文件下载失败（${response.status}），请刷新数据后重试。`);const error=await response.json();throw new Error(error.error||'导出未完成，请重试。');}
+    if(!response.ok){if(online)throw new Error(`快照文件下载失败（${response.status}），请刷新页面后重试。`);const error=await response.json();throw new Error(error.error||'导出未完成，请重试。');}
     const blob=await response.blob();
-    if(online){const signature=new Uint8Array(await blob.slice(0,2).arrayBuffer());if(signature[0]!==80||signature[1]!==75)throw new Error('快照文件格式不正确，请刷新数据后重试。');}
+    if(online){const signature=new Uint8Array(await blob.slice(0,2).arrayBuffer());if(signature[0]!==80||signature[1]!==75)throw new Error('快照文件格式不正确，请刷新页面后重试。');}
     const url=URL.createObjectURL(blob),a=document.createElement('a');
     a.href=url;a.download=online?info.filename:`${request.track==='delta'?'8.28新政监测表':'政策监测表'}_${request.published_from==='1900-01-01'?'历史':request.published_from}_${request.published_to}${request.visibility==='excluded'?'_已排除':request.visibility==='all'?'_全部':''}.xlsx`;
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
@@ -621,7 +622,7 @@ async function boot(){
     const response=await api('/api/bootstrap');data=response.business;token=response.token;status=response.status||{};allPolicies=list(response.policies);policyLibrary=list(response.policy_library?.items);policyReferences=list(response.policy_library?.references);libraryStats=response.policy_library?.stats||{};publicationChannels=list(response.publication_channels);connected=true;lastUpdated=status.last_updated;
     if(!data||!Array.isArray(data.items)||!Array.isArray(data.groups)||!Array.isArray(data.implementation))throw new Error('业务表结构不完整');
     render();renderStatus();await refreshEvents();if(!online)pollTimer=setTimeout(poll,status.running?1000:15000);
-  }catch(error){console.error('Policy page initialization failed',error);connected=false;$('#pm-table-wrap').innerHTML=online?`<div class="pm-data-error">政策数据未能加载：${esc(error.message)}。可点击刷新数据重试。</div>`:'<div class="pm-data-error">暂时无法加载政策表，请确认本机服务已启动后刷新。</div>';$('#pm-run').disabled=!online;}
+  }catch(error){console.error('Policy page initialization failed',error);connected=false;$('#pm-table-wrap').innerHTML=online?`<div class="pm-data-error">政策数据未能加载：${esc(error.message)}。请刷新页面重试。</div>`:'<div class="pm-data-error">暂时无法加载政策表，请确认本机服务已启动后刷新。</div>';if($('#pm-run'))$('#pm-run').disabled=!online;}
 }
 renderStatus();
 boot();
