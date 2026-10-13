@@ -201,7 +201,7 @@ function renderStatus() {
   $('#pm-export').disabled=!connected || exportBusy;
   $('#pm-run').textContent=online?(requestBusy?'刷新中…':'刷新数据'):status.running ? '采集中…' : requestBusy ? '提交中…' : '采集';
   if(online)$('#pm-run').title='读取已发布的最新政策数据';
-  $('#pm-freshness').textContent=online?`数据截至 ${shortDate(status.last_updated||status.snapshot_generated_at)}${status.daily_update_enabled===true?' · 每日更新':''}`:status.last_updated?'最近采集 '+shortDate(status.last_updated):'尚无采集记录';
+  $('#pm-freshness').textContent=online?`最近检查 ${shortDate(status.last_checked_at||status.last_updated)}${status.collection_status==='partial'?' · 部分完成':status.collection_status==='failed'?' · 检查失败':''}`:status.last_updated?'最近采集 '+shortDate(status.last_updated):'尚无采集记录';
 }
 async function refreshEvents(){
   const response=await api('/api/policy-events');policyEvents=list(response.items);
